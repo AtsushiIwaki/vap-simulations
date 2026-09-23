@@ -9,9 +9,12 @@ export trace_out_ancilla,
        partial_trace_mpo,
        depolarizing_superoperator,
        apply_local_channel,
-       apply_local_channel_all
+       apply_local_channel_all,
+       validate_beta_grid,
+       scaled_filename_token
 
 include("mpo_operations.jl")
 include("noise_channels.jl")
+include("sweep_validation.jl")
 
 end

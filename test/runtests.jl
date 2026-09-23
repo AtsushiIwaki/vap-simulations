@@ -3,6 +3,13 @@ using ITensors
 using ITensorMPS
 using VAPSimulations
 
+@testset "sweep validation and filename encoding" begin
+    @test isnothing(validate_beta_grid(0.0, 0.5, 0.1))
+    @test_throws ArgumentError validate_beta_grid(0.05, 0.25, 0.1)
+    @test scaled_filename_token(0.0001, 1000, 3) !=
+          scaled_filename_token(0.0002, 1000, 3)
+end
+
 @testset "partial trace and index replacement" begin
     sites = siteinds("Qubit", 3)
     psi = MPS(sites, ["0", "0", "0"])
@@ -56,6 +63,7 @@ include(
     @test_throws ArgumentError validate_parameters(2, 4, 4, Int[], 0.0, 0.5, 0.1)
     @test_throws ArgumentError validate_parameters(2, 4, 4, [1, 1], 0.0, 0.5, 0.1)
     @test_throws ArgumentError validate_parameters(2, 4, 4, [1], 0.0, 0.5, 0.0)
+    @test_throws ArgumentError validate_parameters(2, 4, 4, [1], 0.05, 0.25, 0.1)
     @test isnothing(validate_parameters(2, 4, 4, [1, 2], 0.0, 0.5, 0.1))
     @test imaginary_time_steps(0.2, 0.1) == 2
 end
@@ -83,6 +91,10 @@ include(
     @test_throws ArgumentError validate_noisy_tfi_parameters(
         2, 4, 4, [1, 1], [0.0], 0.0, 0.5, 0.1
     )
+    @test_throws ArgumentError validate_noisy_tfi_parameters(
+        2, 4, 4, [1], [0.0], 0.05, 0.25, 0.1
+    )
+    @test error_rate_filename_token(0.0001) != error_rate_filename_token(0.0002)
     @test isnothing(
         validate_noisy_tfi_parameters(
             2, 4, 4, [1, 2], [0.0, 0.001], 0.0, 0.5, 0.1
@@ -121,6 +133,11 @@ include(
     @test_throws ArgumentError validate_random_field_heisenberg_parameters(
         2, 3, 3, [1.0], 1:1, [1], 0.0, 0.5, 0.0
     )
+    @test_throws ArgumentError validate_random_field_heisenberg_parameters(
+        2, 3, 3, [1.0], 1:1, [1], 0.05, 0.25, 0.1
+    )
+    @test field_strength_filename_token(0.51) !=
+          field_strength_filename_token(0.52)
     @test isnothing(
         validate_random_field_heisenberg_parameters(
             2, 3, 3, [0.5, 1.0], 1:2, [1, 2], 0.0, 0.5, 0.1

@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
 
 import argparse
-import json
-import math
 import re
+import sys
 from pathlib import Path
 
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from plot_validation import (  # noqa: E402
+    finite_array,
+    fixed_parameter_signature,
+    load_json_object,
+    require_compatible_signature,
+    require_parameters,
+)
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -19,9 +27,18 @@ DEFAULT_FIGURE_DIR = (
 )
 FILENAME = re.compile(
     r"^nA(?P<size_A>\d+)_dAC(?P<dAC>\d+)_dBB(?P<dBB>\d+)_"
-    r"hx(?P<hx>\d+)_n(?P<n>\d+)\.json$"
+    r"hx(?P<hx>[A-Za-z0-9]+)(?:_m(?P<max_n>\d+))?_n(?P<n>\d+)\.json$"
 )
 ARRAY_KEYS = ("beta", "energy", "cost_vap", "cost_lvp")
+FIXED_PARAMETER_KEYS = (
+    "size_A",
+    "distance_AC",
+    "distance_BB",
+    "hx",
+    "requested_copy_counts",
+    "max_copy_count",
+    "total_size",
+)
 
 
 def parse_args(argv=None):
@@ -37,28 +54,40 @@ def parse_args(argv=None):
 
 def load_records(input_dir: Path):
     records = []
+    seen_copy_counts = set()
     beta_reference = None
+    signature_reference = None
     for path in sorted(input_dir.glob("*.json")):
         match = FILENAME.match(path.name)
         if match is None:
             continue
-        with path.open(encoding="utf-8") as handle:
-            record = json.load(handle)
+        record = load_json_object(path)
         missing = ({"parameters", *ARRAY_KEYS}).difference(record)
         if missing:
             raise ValueError(f"{path.name}: missing keys: {', '.join(sorted(missing))}")
+        parameters = require_parameters(record, path)
+        signature = fixed_parameter_signature(
+            parameters, FIXED_PARAMETER_KEYS, path
+        )
+        signature_reference = require_compatible_signature(
+            signature_reference, signature, path
+        )
+        for key in ARRAY_KEYS:
+            record[key] = finite_array(record, key, path)
         lengths = {len(record[key]) for key in ARRAY_KEYS}
         if len(lengths) != 1:
             raise ValueError(f"{path.name}: beta and observable lengths differ")
-        for key in ARRAY_KEYS:
-            if not all(math.isfinite(float(value)) for value in record[key]):
-                raise ValueError(f"{path.name}: {key} must contain finite values")
-        beta = [float(value) for value in record["beta"]]
+        beta = record["beta"]
         if beta_reference is None:
             beta_reference = beta
         elif beta != beta_reference:
             raise ValueError(f"{path.name}: beta grid does not match other records")
         record["number_of_copies"] = int(match.group("n"))
+        if record["number_of_copies"] in seen_copy_counts:
+            raise ValueError(
+                f"{path.name}: duplicate copy count {record['number_of_copies']}"
+            )
+        seen_copy_counts.add(record["number_of_copies"])
         records.append(record)
     if not records:
         raise FileNotFoundError(

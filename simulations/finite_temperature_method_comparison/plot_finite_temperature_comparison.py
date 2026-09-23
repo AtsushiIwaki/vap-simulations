@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
 
 import argparse
-import json
-import math
 import re
+import sys
 from pathlib import Path
 
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from plot_validation import (  # noqa: E402
+    finite_number,
+    fixed_parameter_signature,
+    load_json_object,
+    require_compatible_signature,
+    require_parameters,
+)
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -24,7 +32,7 @@ DEFAULT_FIGURE_DIR = (
 )
 FILENAME = re.compile(
     r"^nA(?P<size_A>\d+)_dbuf(?P<d_buf>\d+)_dsep(?P<d_sep>\d+)_"
-    r"hx(?P<hx>\d+)_beta(?P<beta>\d+)\.json$"
+    r"hx(?P<hx>[A-Za-z0-9]+)_beta(?P<beta>[A-Za-z0-9]+)\.json$"
 )
 VALUE_KEYS = (
     "trace_distance_fvp_lvp",
@@ -34,6 +42,7 @@ VALUE_KEYS = (
     "cost_lvp",
     "cost_vap",
 )
+FIXED_PARAMETER_KEYS = ("size_A", "distance_boundary", "hx", "beta")
 
 
 def parse_args(argv=None):
@@ -51,25 +60,40 @@ def parse_args(argv=None):
 
 def load_records(input_dir: Path):
     records = []
+    seen_sweep_points = set()
+    signature_reference = None
     for path in sorted(input_dir.glob("*.json")):
         match = FILENAME.match(path.name)
         if match is None:
             continue
-        with path.open(encoding="utf-8") as handle:
-            record = json.load(handle)
+        record = load_json_object(path)
         missing = ({"parameters", *VALUE_KEYS}).difference(record)
         if missing:
             raise ValueError(f"{path.name}: missing keys: {', '.join(sorted(missing))}")
-        parameters = record["parameters"]
+        parameters = require_parameters(record, path)
         parameter_missing = {"d_buf", "d_sep"}.difference(parameters)
         if parameter_missing:
             raise ValueError(
                 f"{path.name}: missing parameter keys: "
                 f"{', '.join(sorted(parameter_missing))}"
             )
+        try:
+            sweep_point = (int(parameters["d_buf"]), int(parameters["d_sep"]))
+        except (TypeError, ValueError) as error:
+            raise ValueError(
+                f"{path.name}: d_buf and d_sep must be integers"
+            ) from error
+        if sweep_point in seen_sweep_points:
+            raise ValueError(f"{path.name}: duplicate sweep point {sweep_point}")
+        seen_sweep_points.add(sweep_point)
+        signature = fixed_parameter_signature(
+            parameters, FIXED_PARAMETER_KEYS, path
+        )
+        signature_reference = require_compatible_signature(
+            signature_reference, signature, path
+        )
         for key in VALUE_KEYS:
-            if not math.isfinite(float(record[key])):
-                raise ValueError(f"{path.name}: {key} must be finite")
+            record[key] = finite_number(record[key], path, key)
         records.append(record)
     if not records:
         raise FileNotFoundError(

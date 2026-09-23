@@ -222,12 +222,12 @@ function main(args=ARGS)
             rho_vap /= trace_vap
 
             filename = @sprintf(
-                "nA%d_dbuf%02d_dsep%02d_hx%02d_beta%02d.json",
+                "nA%d_dbuf%02d_dsep%02d_hx%s_beta%s.json",
                 size_A,
                 d_buf,
                 d_sep,
-                round(Int, 10hx),
-                round(Int, 10beta),
+                scaled_filename_token(hx, 10, 2),
+                scaled_filename_token(beta, 10, 2),
             )
             data = Dict(
                 "parameters" => Dict(

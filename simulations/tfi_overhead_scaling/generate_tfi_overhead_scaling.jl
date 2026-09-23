@@ -97,8 +97,7 @@ function validate_parameters(
     all(>(0), copies) || throw(ArgumentError("copy counts must be positive"))
     length(unique(copies)) == length(copies) ||
         throw(ArgumentError("copy counts must be unique"))
-    beta_step > 0 || throw(ArgumentError("beta_step must be positive"))
-    beta_max >= beta_min >= 0 || throw(ArgumentError("invalid beta interval"))
+    validate_beta_grid(beta_min, beta_max, beta_step)
     return nothing
 end
 
@@ -312,11 +311,12 @@ function main(cli_args=ARGS)
     for n_copies in n_copies_list
 
         file_name = @sprintf(
-            "nA%d_dAC%d_dBB%d_hx%02d_n%d.json",
+            "nA%d_dAC%d_dBB%d_hx%s_m%d_n%d.json",
             N_A,
             dist_AC,
             dist_BB,
-            round(Int, hx * 10),
+            scaled_filename_token(hx, 10, 2),
+            max_n,
             n_copies,
         )
 
@@ -327,6 +327,10 @@ function main(cli_args=ARGS)
                 "distance_BB" => dist_BB,
                 "hx" => hx,
                 "number_of_copies" => n_copies,
+                "requested_copy_counts" => collect(n_copies_list),
+                "max_copy_count" => max_n,
+                "total_size" => total_sites,
+                "selected_site_indices" => sub_indices_dict[n_copies],
                 "beta_min" => beta_min,
                 "beta_max" => beta_max,
                 "beta_step" => beta_step,

@@ -15,6 +15,7 @@ reference-energy data.
 
 ```text
 src/                                           shared Julia MPO operations
+simulations/plot_validation.py                 shared plot-input validation
 simulations/finite_temperature_method_comparison/
 simulations/tfi_overhead_scaling/
 simulations/noisy_tfi/
@@ -162,7 +163,9 @@ PDF: `outputs/random_field_heisenberg/figures/random_field_heisenberg.pdf`
 Generators write JSON to `outputs/<pipeline>/data/`; plotters write PDF files
 to `outputs/<pipeline>/figures/`. Generated data and figures are intentionally
 not versioned. Use `--output_dir`, `--input-dir`, and `--output` to override
-the relevant defaults.
+the relevant defaults. Copy-based pipelines include the maximum requested copy
+count in each filename and record the complete copy list, total chain size,
+and selected site indices in every JSON file.
 
 If output from incompatible parameter sweeps shares a directory, use a fresh
 output directory or pass a matching input directory to the plotter.
@@ -176,10 +179,12 @@ repository root:
 julia --startup-file=no --project=. test/runtests.jl
 python3 -m unittest test.test_plots -v
 python3 -m compileall -q simulations test
+test/test_multicopy_generators.sh
 ```
 
-The test suite uses small MPOs and fixture JSON. Full paper-default
-calculations are not part of the automated tests.
+The unit suite uses small MPOs and fixture JSON. The final command is a reduced
+multi-copy integration check for the three copy-based pipelines. Full
+paper-default calculations are not part of the automated tests.
 
 ## Citation
 

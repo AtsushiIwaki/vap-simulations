@@ -70,12 +70,15 @@ function validate_noisy_tfi_parameters(
         throw(ArgumentError("error rates must satisfy 0 <= p <= 1"))
     length(unique(error_rates)) == length(error_rates) ||
         throw(ArgumentError("error rates must be unique"))
-    beta_step > 0 || throw(ArgumentError("beta_step must be positive"))
-    beta_max >= beta_min >= 0 || throw(ArgumentError("invalid beta interval"))
+    validate_beta_grid(beta_min, beta_max, beta_step)
     return nothing
 end
 
 imaginary_time_steps_noisy(beta, beta_step) = round(Int, beta / beta_step)
+
+function error_rate_filename_token(error_rate)
+    return scaled_filename_token(error_rate, 1000, 3)
+end
 
 function main(cli_args=ARGS)
     args = parse_commandline(cli_args)
@@ -221,12 +224,13 @@ function main(cli_args=ARGS)
     for (rate_index, error_rate) in enumerate(error_rates)
         for n_copies in copies
             file_name = @sprintf(
-                "nA%d_dAC%d_dBB%d_hx%02d_p%03d_n%d.json",
+                "nA%d_dAC%d_dBB%d_hx%s_p%s_m%d_n%d.json",
                 size_A,
                 distance_AC,
                 distance_BB,
-                round(Int, 10 * hx),
-                round(Int, 1000 * error_rate),
+                scaled_filename_token(hx, 10, 2),
+                error_rate_filename_token(error_rate),
+                max_copies,
                 n_copies,
             )
             data = Dict(
@@ -237,6 +241,10 @@ function main(cli_args=ARGS)
                     "hx" => hx,
                     "error_rate" => error_rate,
                     "number_of_copies" => n_copies,
+                    "requested_copy_counts" => collect(copies),
+                    "max_copy_count" => max_copies,
+                    "total_size" => total_size,
+                    "selected_site_indices" => subregion_indices[n_copies],
                     "beta_min" => beta_min,
                     "beta_max" => beta_max,
                     "beta_step" => beta_step,

@@ -25,7 +25,12 @@ class FiniteTemperaturePlotTest(unittest.TestCase):
             data_dir = Path(tmp) / "data"
             data_dir.mkdir()
             payload = {
-                "parameters": {"size_A": 1, "hx": 1.0, "beta": 1.0},
+                "parameters": {
+                    "size_A": 1,
+                    "distance_boundary": 1,
+                    "hx": 1.0,
+                    "beta": 1.0,
+                },
                 "trace_distance_fvp_lvp": 0.2,
                 "trace_distance_lvp_vap": 0.1,
                 "trace_distance_fvp_vap": 0.3,
@@ -65,6 +70,52 @@ class FiniteTemperaturePlotTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn(bad.name, result.stderr)
 
+    def test_invalid_json_names_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "nA1_dbuf01_dsep01_hx10_beta10.json"
+            bad.write_text('{"parameters":', encoding="utf-8")
+            result = run_plot(
+                "simulations/finite_temperature_method_comparison/plot_finite_temperature_comparison.py",
+                "--input-dir",
+                tmp,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(bad.name, result.stderr)
+
+    def test_incompatible_fixed_parameters_name_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            base = {
+                "parameters": {
+                    "size_A": 1,
+                    "d_buf": 1,
+                    "d_sep": 1,
+                    "distance_boundary": 1,
+                    "hx": 1.0,
+                    "beta": 1.0,
+                },
+                "trace_distance_fvp_lvp": 0.2,
+                "trace_distance_lvp_vap": 0.1,
+                "trace_distance_fvp_vap": 0.3,
+                "cost_fvp": 2.0,
+                "cost_lvp": 3.0,
+                "cost_vap": 4.0,
+            }
+            (data_dir / "nA1_dbuf01_dsep01_hx10_beta10.json").write_text(
+                json.dumps(base), encoding="utf-8"
+            )
+            incompatible = json.loads(json.dumps(base))
+            incompatible["parameters"].update({"d_buf": 2, "hx": 2.0})
+            bad = data_dir / "nA1_dbuf02_dsep01_hx20_beta10.json"
+            bad.write_text(json.dumps(incompatible), encoding="utf-8")
+            result = run_plot(
+                "simulations/finite_temperature_method_comparison/plot_finite_temperature_comparison.py",
+                "--input-dir",
+                tmp,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(bad.name, result.stderr)
+
 
 class TfiOverheadPlotTest(unittest.TestCase):
     script = "simulations/tfi_overhead_scaling/plot_tfi_overhead_scaling.py"
@@ -78,6 +129,9 @@ class TfiOverheadPlotTest(unittest.TestCase):
                 "distance_BB": 4,
                 "hx": 1.0,
                 "number_of_copies": n,
+                "requested_copy_counts": [1, 2],
+                "max_copy_count": 2,
+                "total_size": 32,
             },
             "beta": beta or [0.0, 0.1],
             "energy": [-1.0, -1.1],
@@ -123,6 +177,35 @@ class TfiOverheadPlotTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn(bad.name, result.stderr)
 
+    def test_empty_arrays_name_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = self.payload(1)
+            for key in ("beta", "energy", "cost_vap", "cost_lvp"):
+                payload[key] = []
+            bad = self.write_record(tmp, 1, payload)
+            result = run_plot(self.script, "--input-dir", tmp)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(bad.name, result.stderr)
+
+    def test_invalid_json_names_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "nA2_dAC4_dBB4_hx10_n1.json"
+            bad.write_text('{"parameters":', encoding="utf-8")
+            result = run_plot(self.script, "--input-dir", tmp)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(bad.name, result.stderr)
+
+    def test_incompatible_fixed_parameters_name_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.write_record(tmp, 1)
+            incompatible = self.payload(2)
+            incompatible["parameters"]["distance_AC"] = 5
+            bad = Path(tmp) / "nA2_dAC5_dBB4_hx10_n2.json"
+            bad.write_text(json.dumps(incompatible), encoding="utf-8")
+            result = run_plot(self.script, "--input-dir", tmp)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(bad.name, result.stderr)
+
 
 class NoisyTfiPlotTest(unittest.TestCase):
     script = "simulations/noisy_tfi/plot_noisy_tfi.py"
@@ -137,6 +220,9 @@ class NoisyTfiPlotTest(unittest.TestCase):
                 "hx": 1.0,
                 "number_of_copies": n,
                 "error_rate": error_rate,
+                "requested_copy_counts": [1, 2],
+                "max_copy_count": 2,
+                "total_size": 32,
             },
             "beta": [0.0, 0.1],
             "energy_vap": [-1.0, -1.0 - n * error_rate],
@@ -205,6 +291,25 @@ class NoisyTfiPlotTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn(bad.name, result.stderr)
 
+    def test_invalid_json_names_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "nA2_dAC4_dBB4_hx10_p000_n1.json"
+            bad.write_text('{"parameters":', encoding="utf-8")
+            result = run_plot(self.script, "--input-dir", tmp)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(bad.name, result.stderr)
+
+    def test_incompatible_fixed_parameters_name_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.write_record(tmp, 1, 0)
+            incompatible = self.payload(1, 0.001)
+            incompatible["parameters"]["distance_AC"] = 5
+            bad = Path(tmp) / "nA2_dAC5_dBB4_hx10_p001_n1.json"
+            bad.write_text(json.dumps(incompatible), encoding="utf-8")
+            result = run_plot(self.script, "--input-dir", tmp, "--beta", "0.1")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(bad.name, result.stderr)
+
 
 class RandomFieldHeisenbergPlotTest(unittest.TestCase):
     script = (
@@ -224,6 +329,10 @@ class RandomFieldHeisenbergPlotTest(unittest.TestCase):
                 "number_of_copies": 1,
                 "realization": realization,
                 "sampled_fields": [0.1, -0.2],
+                "base_seed": 1234,
+                "requested_copy_counts": [1],
+                "max_copy_count": 1,
+                "total_size": 14,
             },
             "beta": [0.0, 0.1],
             "energy_vap": [0.0, -0.1 * field_strength],
@@ -282,6 +391,34 @@ class RandomFieldHeisenbergPlotTest(unittest.TestCase):
                 tmp,
                 "--field-strengths",
                 "0.5",
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(bad.name, result.stderr)
+
+    def test_invalid_json_names_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "nA2_dAC3_dBB3_D10_W05_n1_r01.json"
+            bad.write_text('{"parameters":', encoding="utf-8")
+            result = run_plot(
+                self.script, "--input-dir", tmp, "--field-strengths", "0.5"
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(bad.name, result.stderr)
+
+    def test_incompatible_fixed_parameters_name_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.write_record(tmp, 0.5)
+            incompatible = self.payload(1.0)
+            incompatible["parameters"]["distance_AC"] = 4
+            bad = Path(tmp) / "nA2_dAC4_dBB3_D10_W10_n1_r01.json"
+            bad.write_text(json.dumps(incompatible), encoding="utf-8")
+            result = run_plot(
+                self.script,
+                "--input-dir",
+                tmp,
+                "--field-strengths",
+                "0.5",
+                "1.0",
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertIn(bad.name, result.stderr)

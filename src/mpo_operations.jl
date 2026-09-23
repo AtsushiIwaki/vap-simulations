@@ -20,10 +20,13 @@ end
 function replace_site_indices(rho::MPO, sites::AbstractVector{<:Index})::MPO
     length(rho) == length(sites) ||
         throw(DimensionMismatch("rho and sites must have equal length"))
+    physical_sites = collect(siteinds(rho; tags="Site", plev=0))
+    length(physical_sites) == length(rho) ||
+        throw(ArgumentError("rho must have one level-zero Site index per tensor"))
 
     replaced = MPO(length(rho))
     for i in eachindex(rho)
-        old = siteind(rho, i)
+        old = physical_sites[i]
         new = sites[i]
         replaced[i] = rho[i] * delta(old, new) * delta(old', new')
     end

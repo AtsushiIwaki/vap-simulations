@@ -94,12 +94,15 @@ function validate_random_field_heisenberg_parameters(
     all(>(0), copies) || throw(ArgumentError("copy counts must be positive"))
     length(unique(copies)) == length(copies) ||
         throw(ArgumentError("copy counts must be unique"))
-    beta_step > 0 || throw(ArgumentError("beta_step must be positive"))
-    beta_max >= beta_min >= 0 || throw(ArgumentError("invalid beta interval"))
+    validate_beta_grid(beta_min, beta_max, beta_step)
     return nothing
 end
 
 imaginary_time_steps_random_field(beta, beta_step) = round(Int, beta / beta_step)
+
+function field_strength_filename_token(field_strength)
+    return scaled_filename_token(field_strength, 10, 2)
+end
 
 function sample_random_fields(total_size, field_strength, base_seed, realization)
     realization_seed = base_seed + realization
@@ -284,12 +287,13 @@ function main(cli_args=ARGS)
 
             for n_copies in copies
                 file_name = @sprintf(
-                    "nA%d_dAC%d_dBB%d_D%02d_W%02d_n%d_r%02d.json",
+                    "nA%d_dAC%d_dBB%d_D%s_W%s_m%d_n%d_r%02d.json",
                     size_A,
                     distance_AC,
                     distance_BB,
-                    round(Int, 10 * anisotropy),
-                    round(Int, 10 * field_strength),
+                    scaled_filename_token(anisotropy, 10, 2),
+                    field_strength_filename_token(field_strength),
+                    max_copies,
                     n_copies,
                     realization,
                 )
@@ -305,6 +309,11 @@ function main(cli_args=ARGS)
                         "realization_seed" => realization_seed,
                         "sampled_fields" => sampled_fields,
                         "number_of_copies" => n_copies,
+                        "requested_copy_counts" => collect(copies),
+                        "max_copy_count" => max_copies,
+                        "total_size" => total_size,
+                        "selected_site_indices" =>
+                            subregion_indices[n_copies],
                         "beta_min" => beta_min,
                         "beta_max" => beta_max,
                         "beta_step" => beta_step,
