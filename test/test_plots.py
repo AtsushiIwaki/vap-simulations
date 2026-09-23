@@ -124,5 +124,86 @@ class TfiOverheadPlotTest(unittest.TestCase):
             self.assertIn(bad.name, result.stderr)
 
 
+class NoisyTfiPlotTest(unittest.TestCase):
+    script = "simulations/noisy_tfi/plot_noisy_tfi.py"
+
+    @staticmethod
+    def payload(n, error_rate):
+        return {
+            "parameters": {
+                "size_A": 2,
+                "distance_AC": 4,
+                "distance_BB": 4,
+                "hx": 1.0,
+                "number_of_copies": n,
+                "error_rate": error_rate,
+            },
+            "beta": [0.0, 0.1],
+            "energy_vap": [-1.0, -1.0 - n * error_rate],
+            "cost_vap": [1.0, 1.1],
+        }
+
+    def write_record(self, directory, n, p_raw):
+        path = Path(directory) / f"nA2_dAC4_dBB4_hx10_p{p_raw:03d}_n{n}.json"
+        path.write_text(
+            json.dumps(self.payload(n, p_raw / 1000.0)), encoding="utf-8"
+        )
+        return path
+
+    def test_plot_needs_no_reference_data_and_writes_pdf(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for n in (1, 2):
+                self.write_record(tmp, n, 0)
+                self.write_record(tmp, n, 1)
+            output = Path(tmp) / "noisy.pdf"
+            result = run_plot(
+                self.script,
+                "--input-dir",
+                tmp,
+                "--output",
+                str(output),
+                "--beta",
+                "0.1",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertGreater(output.stat().st_size, 0)
+
+    def test_missing_zero_noise_baseline_is_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.write_record(tmp, 1, 1)
+            result = run_plot(
+                self.script, "--input-dir", tmp, "--beta", "0.1"
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("p=0", result.stderr)
+
+    def test_zero_noise_difference_uses_linear_scale_without_crashing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.write_record(tmp, 1, 0)
+            noisy = self.payload(1, 0.001)
+            noisy["energy_vap"] = [-1.0, -1.0]
+            path = Path(tmp) / "nA2_dAC4_dBB4_hx10_p001_n1.json"
+            path.write_text(json.dumps(noisy), encoding="utf-8")
+            output = Path(tmp) / "zero-difference.pdf"
+            result = run_plot(
+                self.script,
+                "--input-dir",
+                tmp,
+                "--output",
+                str(output),
+                "--beta",
+                "0.1",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertGreater(output.stat().st_size, 0)
+
+    def test_matching_malformed_record_names_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "nA2_dAC4_dBB4_hx10_p000_n1.json"
+            bad.write_text('{"parameters": {}}', encoding="utf-8")
+            result = run_plot(self.script, "--input-dir", tmp)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(bad.name, result.stderr)
+
 if __name__ == "__main__":
     unittest.main()

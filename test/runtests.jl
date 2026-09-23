@@ -59,3 +59,33 @@ include(
     @test isnothing(validate_parameters(2, 4, 4, [1, 2], 0.0, 0.5, 0.1))
     @test imaginary_time_steps(0.2, 0.1) == 2
 end
+
+include(
+    joinpath(
+        @__DIR__,
+        "..",
+        "simulations",
+        "noisy_tfi",
+        "generate_noisy_tfi.jl",
+    ),
+)
+
+@testset "noisy TFI parameter validation" begin
+    @test_throws ArgumentError validate_noisy_tfi_parameters(
+        2, 4, 4, [1], Float64[], 0.0, 0.5, 0.1
+    )
+    @test_throws ArgumentError validate_noisy_tfi_parameters(
+        2, 4, 4, [1], [-0.1], 0.0, 0.5, 0.1
+    )
+    @test_throws ArgumentError validate_noisy_tfi_parameters(
+        2, 4, 4, [1], [1.1], 0.0, 0.5, 0.1
+    )
+    @test_throws ArgumentError validate_noisy_tfi_parameters(
+        2, 4, 4, [1, 1], [0.0], 0.0, 0.5, 0.1
+    )
+    @test isnothing(
+        validate_noisy_tfi_parameters(
+            2, 4, 4, [1, 2], [0.0, 0.001], 0.0, 0.5, 0.1
+        ),
+    )
+end
