@@ -41,3 +41,21 @@ end
     @test_throws ArgumentError depolarizing_superoperator(1.1)
     @test_throws BoundsError apply_local_channel(rho, 3, channel)
 end
+
+include(
+    joinpath(
+        @__DIR__,
+        "..",
+        "simulations",
+        "tfi_overhead_scaling",
+        "generate_tfi_overhead_scaling.jl",
+    ),
+)
+
+@testset "TFI overhead parameter validation" begin
+    @test_throws ArgumentError validate_parameters(2, 4, 4, Int[], 0.0, 0.5, 0.1)
+    @test_throws ArgumentError validate_parameters(2, 4, 4, [1, 1], 0.0, 0.5, 0.1)
+    @test_throws ArgumentError validate_parameters(2, 4, 4, [1], 0.0, 0.5, 0.0)
+    @test isnothing(validate_parameters(2, 4, 4, [1, 2], 0.0, 0.5, 0.1))
+    @test imaginary_time_steps(0.2, 0.1) == 2
+end
