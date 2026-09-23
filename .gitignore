@@ -1,0 +1,21 @@
+# Generated simulation artifacts
+/outputs/**
+!/outputs/.gitkeep
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.matplotlib/
+
+# Julia
+.julia/
+*.cov
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*~
