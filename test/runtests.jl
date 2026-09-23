@@ -89,3 +89,41 @@ include(
         ),
     )
 end
+
+include(
+    joinpath(
+        @__DIR__,
+        "..",
+        "simulations",
+        "random_field_heisenberg",
+        "generate_random_field_heisenberg.jl",
+    ),
+)
+
+@testset "random-field Heisenberg parameter validation" begin
+    @test parse_realization_range("1:3") == 1:3
+    @test_throws ArgumentError parse_realization_range("1")
+    seed, fields = sample_random_fields(4, 1.0, 1234, 1)
+    repeated_seed, repeated_fields = sample_random_fields(4, 1.0, 1234, 1)
+    _, other_fields = sample_random_fields(4, 1.0, 1234, 2)
+    @test seed == repeated_seed == 1235
+    @test fields == repeated_fields
+    @test fields != other_fields
+    @test_throws ArgumentError validate_random_field_heisenberg_parameters(
+        2, 3, 3, Float64[], 1:1, [1], 0.0, 0.5, 0.1
+    )
+    @test_throws ArgumentError validate_random_field_heisenberg_parameters(
+        2, 3, 3, [1.0], 1:0, [1], 0.0, 0.5, 0.1
+    )
+    @test_throws ArgumentError validate_random_field_heisenberg_parameters(
+        2, 3, 3, [1.0], 1:1, [1, 1], 0.0, 0.5, 0.1
+    )
+    @test_throws ArgumentError validate_random_field_heisenberg_parameters(
+        2, 3, 3, [1.0], 1:1, [1], 0.0, 0.5, 0.0
+    )
+    @test isnothing(
+        validate_random_field_heisenberg_parameters(
+            2, 3, 3, [0.5, 1.0], 1:2, [1, 2], 0.0, 0.5, 0.1
+        ),
+    )
+end

@@ -205,5 +205,86 @@ class NoisyTfiPlotTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn(bad.name, result.stderr)
 
+
+class RandomFieldHeisenbergPlotTest(unittest.TestCase):
+    script = (
+        "simulations/random_field_heisenberg/"
+        "plot_random_field_heisenberg.py"
+    )
+
+    @staticmethod
+    def payload(field_strength, realization=1):
+        return {
+            "parameters": {
+                "size_A": 2,
+                "distance_AC": 3,
+                "distance_BB": 3,
+                "Delta": 1.0,
+                "random_field": field_strength,
+                "number_of_copies": 1,
+                "realization": realization,
+                "sampled_fields": [0.1, -0.2],
+            },
+            "beta": [0.0, 0.1],
+            "energy_vap": [0.0, -0.1 * field_strength],
+            "cost_vap": [1.0, 1.1],
+        }
+
+    def write_record(self, directory, field_strength, realization=1, payload=None):
+        field_code = round(10 * field_strength)
+        path = Path(directory) / (
+            f"nA2_dAC3_dBB3_D10_W{field_code:02d}_n1_r{realization:02d}.json"
+        )
+        path.write_text(
+            json.dumps(payload or self.payload(field_strength, realization)),
+            encoding="utf-8",
+        )
+        return path
+
+    def test_single_realization_writes_pdf_with_zero_error_bars(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.write_record(tmp, 0.5)
+            self.write_record(tmp, 1.0)
+            output = Path(tmp) / "random-field.pdf"
+            result = run_plot(
+                self.script,
+                "--input-dir",
+                tmp,
+                "--output",
+                str(output),
+                "--field-strengths",
+                "0.5",
+                "1.0",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertGreater(output.stat().st_size, 0)
+
+    def test_missing_requested_field_strength_is_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.write_record(tmp, 0.5)
+            result = run_plot(
+                self.script,
+                "--input-dir",
+                tmp,
+                "--field-strengths",
+                "0.5",
+                "1.0",
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("W=1", result.stderr)
+
+    def test_matching_malformed_record_names_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = self.write_record(tmp, 0.5, payload={"parameters": {}})
+            result = run_plot(
+                self.script,
+                "--input-dir",
+                tmp,
+                "--field-strengths",
+                "0.5",
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(bad.name, result.stderr)
+
 if __name__ == "__main__":
     unittest.main()
