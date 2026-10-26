@@ -236,11 +236,11 @@ class NoisyTfiPlotTest(unittest.TestCase):
         )
         return path
 
-    def test_plot_needs_no_reference_data_and_writes_pdf(self):
+    def test_plot_writes_pdf_without_reference_inputs(self):
         with tempfile.TemporaryDirectory() as tmp:
             for n in (1, 2):
                 self.write_record(tmp, n, 0)
-                self.write_record(tmp, n, 1)
+                self.write_record(tmp, n, 10)
             output = Path(tmp) / "noisy.pdf"
             result = run_plot(
                 self.script,
@@ -263,25 +263,23 @@ class NoisyTfiPlotTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("p=0", result.stderr)
 
-    def test_zero_noise_difference_uses_linear_scale_without_crashing(self):
+    def test_zero_noise_differences_are_omitted_from_log_panel(self):
+        import matplotlib.pyplot as plt
+        from simulations.noisy_tfi.plot_noisy_tfi import load_records, make_figure
+
         with tempfile.TemporaryDirectory() as tmp:
             self.write_record(tmp, 1, 0)
-            noisy = self.payload(1, 0.001)
+            noisy = self.payload(1, 0.01)
             noisy["energy_vap"] = [-1.0, -1.0]
-            path = Path(tmp) / "nA2_dAC4_dBB4_hx10_p001_n1.json"
+            path = Path(tmp) / "nA2_dAC4_dBB4_hx10_p010_n1.json"
             path.write_text(json.dumps(noisy), encoding="utf-8")
-            output = Path(tmp) / "zero-difference.pdf"
-            result = run_plot(
-                self.script,
-                "--input-dir",
-                tmp,
-                "--output",
-                str(output),
-                "--beta",
-                "0.1",
-            )
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertGreater(output.stat().st_size, 0)
+            figure = make_figure(load_records(Path(tmp)), beta=0.1)
+            try:
+                self.assertEqual(len(figure.axes), 2)
+                self.assertEqual(figure.axes[1].get_yscale(), "log")
+                self.assertEqual(len(figure.axes[1].lines), 0)
+            finally:
+                plt.close(figure)
 
     def test_matching_malformed_record_names_the_file(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -367,6 +365,32 @@ class RandomFieldHeisenbergPlotTest(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertGreater(output.stat().st_size, 0)
+
+    def test_old_and_corrected_energy_observables_cannot_be_mixed(self):
+        from simulations.random_field_heisenberg.plot_random_field_heisenberg import load_records
+
+        for legacy in (None, "unreflected_fields"):
+            with self.subTest(legacy=legacy), tempfile.TemporaryDirectory() as tmp:
+                old = self.payload(0.5)
+                if legacy is not None:
+                    old["parameters"]["energy_observable_convention"] = legacy
+                self.write_record(tmp, 0.5, payload=old)
+                corrected = self.payload(1.0)
+                corrected["parameters"]["energy_observable_convention"] = "folded_physical_sites"
+                bad = self.write_record(tmp, 1.0, payload=corrected)
+                with self.assertRaisesRegex(ValueError, "energy_observable_convention") as error:
+                    load_records(Path(tmp))
+                self.assertIn(bad.name, str(error.exception))
+
+    def test_corrected_energy_observables_can_be_loaded_together(self):
+        from simulations.random_field_heisenberg.plot_random_field_heisenberg import load_records
+
+        with tempfile.TemporaryDirectory() as tmp:
+            for strength in (0.5, 1.0):
+                payload = self.payload(strength)
+                payload["parameters"]["energy_observable_convention"] = "folded_physical_sites"
+                self.write_record(tmp, strength, payload=payload)
+            self.assertEqual(len(load_records(Path(tmp))), 2)
 
     def test_missing_requested_field_strength_is_reported(self):
         with tempfile.TemporaryDirectory() as tmp:

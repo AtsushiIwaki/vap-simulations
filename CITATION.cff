@@ -6,12 +6,6 @@ authors:
   - family-names: Iwaki
     given-names: Atsushi
     orcid: "https://orcid.org/0000-0002-5345-8045"
-  - family-names: Hakoshima
-    given-names: Hideaki
-    orcid: "https://orcid.org/0000-0003-1295-9801"
-  - family-names: Yoshioka
-    given-names: Nobuyuki
-    orcid: "https://orcid.org/0000-0001-6094-8635"
 license: MIT
 preferred-citation:
   type: article

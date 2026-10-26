@@ -144,3 +144,6 @@ include(
         ),
     )
 end
+
+include(joinpath(@__DIR__, "test_paper_parameters.jl"))
+include(joinpath(@__DIR__, "test_random_field_observable.jl"))

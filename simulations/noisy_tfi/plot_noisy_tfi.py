@@ -120,9 +120,7 @@ def beta_index(beta_values, requested_beta):
     raise ValueError(f"Requested beta={requested_beta:g} is absent from the data")
 
 
-def main(argv=None):
-    args = parse_args(argv)
-    records = load_records(args.input_dir)
+def make_figure(records, *, beta=0.5):
     copies = sorted({record["number_of_copies"] for record in records})
     by_pair = {
         (record["number_of_copies"], record["error_rate"]): record
@@ -132,56 +130,45 @@ def main(argv=None):
         if (n_copies, 0.0) not in by_pair:
             raise ValueError(f"Missing required p=0 baseline for n={n_copies}")
 
-    selected_index = beta_index(records[0]["beta"], args.beta)
+    # Panel (a) uses p=0.01, matching the manuscript caption.
+    copies = [n for n in copies if n <= 4]
+    if not copies:
+        raise ValueError("The paper layout needs data for at least one of n=1..4")
+    for n in copies:
+        if (n, 0.01) not in by_pair:
+            raise ValueError(f"Missing p=0.01 energy data for n={n}")
+    index = beta_index(records[0]["beta"], beta)
+    rates = sorted({record["error_rate"] for record in records if record["error_rate"] > 0})
+    if not rates:
+        raise ValueError("The paper layout requires positive error-rate data")
     figure, axes = plt.subplots(1, 2, figsize=(10, 4.2))
-    all_positive = True
-    for n_copies in copies:
-        baseline = by_pair[(n_copies, 0.0)]
-        beta = [float(value) for value in baseline["beta"]]
-        axes[0].plot(
-            [n_copies * value for value in beta],
-            baseline["energy_vap"],
-            marker="o",
-            label=f"n={n_copies}",
-        )
-
-        noisy_records = sorted(
-            (
-                record
-                for record in records
-                if record["number_of_copies"] == n_copies
-                and record["error_rate"] > 0
-            ),
-            key=lambda record: record["error_rate"],
-        )
-        error_rates = [record["error_rate"] for record in noisy_records]
-        baseline_energy = float(baseline["energy_vap"][selected_index])
-        differences = [
-            abs(float(record["energy_vap"][selected_index]) - baseline_energy)
-            for record in noisy_records
-        ]
-        if error_rates:
-            axes[1].plot(
-                error_rates,
-                differences,
-                marker="o",
-                label=f"n={n_copies}",
-            )
-            all_positive = all_positive and all(value > 0 for value in differences)
-
-    axes[0].set_xlabel(r"$n\beta$")
-    axes[0].set_ylabel("VAP energy")
-    axes[1].set_xlabel("Depolarizing error rate")
-    axes[1].set_ylabel(r"$|E(p)-E(0)|$")
-    if axes[1].lines and all_positive:
-        axes[1].set_xscale("log")
-        axes[1].set_yscale("log")
+    for n in copies:
+        noisy = by_pair[(n, 0.01)]
+        axes[0].plot([n * b for b in noisy["beta"]], noisy["energy_vap"],
+                     marker="o", linestyle="None", label=f"n={n}")
+    for n in copies:
+        baseline_energy = by_pair[(n, 0.0)]["energy_vap"][index]
+        points = [(p, abs(by_pair[(n, p)]["energy_vap"][index] - baseline_energy))
+                  for p in rates if (n, p) in by_pair]
+        points = [(p, error) for p, error in points if error > 0]
+        if points:
+            axes[1].plot([p for p, _ in points], [error for _, error in points],
+                         marker="o", label=f"n={n}")
+    axes[0].set(xlabel=r"$n\beta$", ylabel="VAP energy", xlim=(-0.1, 2.1),
+                title="p = 0.01")
+    axes[1].set(xlabel="p", ylabel=r"$|E(p)-E(0)|$", xscale="log", yscale="log")
     for axis in axes:
         axis.grid(alpha=0.25)
         if axis.lines:
             axis.legend(fontsize="small")
-
     figure.tight_layout()
+    return figure
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    records = load_records(args.input_dir)
+    figure = make_figure(records, beta=args.beta)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(args.output, bbox_inches="tight")
     plt.close(figure)

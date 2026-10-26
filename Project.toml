@@ -1,6 +1,6 @@
 name = "VAPSimulations"
 uuid = "7cc0c5f7-b415-4c4d-a2d0-b66ecf097514"
-authors = ["Atsushi Iwaki", "Hideaki Hakoshima", "Nobuyuki Yoshioka"]
+authors = ["Atsushi Iwaki"]
 version = "0.1.0"
 
 [deps]

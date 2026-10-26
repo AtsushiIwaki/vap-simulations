@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import math
 import re
 import sys
 from pathlib import Path
@@ -69,6 +70,8 @@ def load_records(input_dir: Path):
         signature = fixed_parameter_signature(
             parameters, FIXED_PARAMETER_KEYS, path
         )
+        # Older JSON may omit this field; unknown and recorded steps must not mix.
+        signature["time_step"] = parameters.get("time_step")
         signature_reference = require_compatible_signature(
             signature_reference, signature, path
         )
@@ -97,45 +100,36 @@ def load_records(input_dir: Path):
     return sorted(records, key=lambda record: record["number_of_copies"])
 
 
-def main(argv=None):
-    args = parse_args(argv)
-    records = load_records(args.input_dir)
+def make_figure(records):
+    records = sorted(records, key=lambda record: record["number_of_copies"])
     figure, axes = plt.subplots(1, 2, figsize=(10, 4.2))
 
     for record in records:
-        n = record["number_of_copies"]
-        beta = [float(value) for value in record["beta"]]
-        axes[0].plot(beta, record["energy"], marker="o", label=f"n={n}")
-        axes[1].plot(
-            beta,
-            record["cost_vap"],
-            marker="o",
-            label=f"VAP, n={n}",
-        )
-        axes[1].plot(
-            beta,
-            record["cost_lvp"],
-            marker="s",
-            linestyle="--",
-            label=f"LVP, n={n}",
-        )
-
-    axes[0].set_xlabel(r"$\beta$")
-    axes[0].set_ylabel("Energy")
-    axes[1].set_xlabel(r"$\beta$")
-    axes[1].set_ylabel("Sampling overhead")
-    if all(
-        float(value) > 0
-        for record in records
-        for key in ("cost_vap", "cost_lvp")
-        for value in record[key]
-    ):
-        axes[1].set_yscale("log")
+        axes[0].plot(record["beta"], record["cost_vap"], marker="o",
+                     label=f"n={record['number_of_copies']}")
+    for beta in (0.0, 0.6, 0.8, 1.0):
+        indices = [next((i for i, value in enumerate(record["beta"])
+                         if math.isclose(value, beta, abs_tol=1e-10)), None)
+                   for record in records]
+        if any(index is None for index in indices):
+            continue
+        ratios = [record["cost_lvp"][i] / record["cost_vap"][i]
+                  for record, i in zip(records, indices)]
+        axes[1].plot([r["number_of_copies"] for r in records], ratios,
+                     marker="o", label=rf"$\beta={beta:g}$")
+    axes[0].set(xlabel=r"$\beta$", ylabel="VAP space-time overhead", yscale="log")
+    axes[1].set(xlabel=r"$n$", ylabel="LVP/VAP overhead ratio")
     for axis in axes:
         axis.grid(alpha=0.25)
         axis.legend(fontsize="small")
-
     figure.tight_layout()
+    return figure
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    records = load_records(args.input_dir)
+    figure = make_figure(records)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(args.output, bbox_inches="tight")
     plt.close(figure)

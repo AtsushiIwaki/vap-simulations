@@ -1,0 +1,2 @@
+# POSIX entry points must retain LF on Windows checkouts too.
+*.sh text eol=lf

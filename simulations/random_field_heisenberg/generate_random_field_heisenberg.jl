@@ -106,8 +106,9 @@ end
 
 function sample_random_fields(total_size, field_strength, base_seed, realization)
     realization_seed = base_seed + realization
-    rng = MersenneTwister(realization_seed)
-    fields = [field_strength * (2 * rand(rng) - 1) for _ in 1:total_size]
+    # Preserve the scalar default-RNG draws used by the historical generator.
+    Random.seed!(realization_seed)
+    fields = [field_strength * (2 * rand() - 1) for _ in 1:total_size]
     return realization_seed, fields
 end
 
@@ -272,6 +273,10 @@ function main(cli_args=ARGS)
                             (copy_index - 1) * subregion_size + local_left
                         ]
                         global_right = global_left + 1
+                        # The central pair swaps physical sites when the copy is folded.
+                        if iseven(copy_index)
+                            global_left, global_right = global_right, global_left
+                        end
                         local_terms +=
                             0.5 * sampled_fields[global_left], "Sz", local_left
                         local_terms +=
@@ -307,6 +312,8 @@ function main(cli_args=ARGS)
                         "realization" => realization,
                         "base_seed" => base_seed,
                         "realization_seed" => realization_seed,
+                    "rng" => string(typeof(Random.default_rng())),
+                    "julia_version" => string(VERSION),
                         "sampled_fields" => sampled_fields,
                         "number_of_copies" => n_copies,
                         "requested_copy_counts" => collect(copies),
@@ -314,6 +321,7 @@ function main(cli_args=ARGS)
                         "total_size" => total_size,
                         "selected_site_indices" =>
                             subregion_indices[n_copies],
+                        "energy_observable_convention" => "folded_physical_sites",
                         "beta_min" => beta_min,
                         "beta_max" => beta_max,
                         "beta_step" => beta_step,

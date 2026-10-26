@@ -2,6 +2,10 @@
 /outputs/**
 !/outputs/.gitkeep
 
+# Private numerical archives and internal working documents
+/reference_data/
+/docs/
+
 # Python
 .venv/
 venv/

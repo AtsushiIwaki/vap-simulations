@@ -125,9 +125,7 @@ def use_log_scale(axis, values):
         axis.set_yscale("log")
 
 
-def main(argv=None):
-    args = parse_args(argv)
-    records = load_records(args.input_dir)
+def make_figure(records):
     min_d_buf = min(int(record["parameters"]["d_buf"]) for record in records)
     min_d_sep = min(int(record["parameters"]["d_sep"]) for record in records)
 
@@ -152,6 +150,9 @@ def main(argv=None):
             records, varying, fixed, fixed_value, trace_keys
         )
         x_cost, cost_values = series(records, varying, fixed, fixed_value, cost_keys)
+        # Raw costs are measurement costs; FVP and LVP use two physical copies.
+        for key in ("cost_fvp", "cost_lvp"):
+            cost_values[key] = [2 * value for value in cost_values[key]]
         for key in trace_keys:
             axes[0, column].plot(
                 x_trace, trace_values[key], marker="o", label=labels[key]
@@ -168,10 +169,17 @@ def main(argv=None):
         axes[1, column].grid(alpha=0.25)
 
     axes[0, 0].set_ylabel("Trace distance")
-    axes[1, 0].set_ylabel("Sampling overhead")
+    axes[1, 0].set_ylabel("Space-time overhead")
     axes[0, 0].legend()
     axes[1, 0].legend()
     figure.tight_layout()
+    return figure
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    records = load_records(args.input_dir)
+    figure = make_figure(records)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(args.output, bbox_inches="tight")
     plt.close(figure)

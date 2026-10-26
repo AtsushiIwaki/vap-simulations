@@ -63,6 +63,8 @@ def parse_args(argv=None):
         nargs="+",
         default=[0.5, 1.0],
     )
+    parser.add_argument("--bootstrap-samples", type=int, default=2000)
+    parser.add_argument("--bootstrap-seed", type=int, default=0)
     return parser.parse_args(argv)
 
 
@@ -81,6 +83,9 @@ def load_records(input_dir: Path):
         parameters = require_parameters(record, path)
         signature = fixed_parameter_signature(
             parameters, FIXED_PARAMETER_KEYS, path
+        )
+        signature["energy_observable_convention"] = parameters.get(
+            "energy_observable_convention", "unreflected_fields"
         )
         signature_reference = require_compatible_signature(
             signature_reference, signature, path
@@ -139,56 +144,62 @@ def matches_field(value, requested):
     return math.isclose(value, requested, rel_tol=1e-9, abs_tol=1e-12)
 
 
-def mean_and_sample_std(records):
+def mean_and_bootstrap_error(records, samples, rng):
     energies = np.asarray([record["energy_vap"] for record in records], dtype=float)
     mean = energies.mean(axis=0)
-    if len(records) == 1:
-        standard_deviation = np.zeros_like(mean)
-    else:
-        standard_deviation = energies.std(axis=0, ddof=1)
-    return mean, standard_deviation
+    if len(records) < 2 or samples <= 1:
+        return mean, np.zeros_like(mean)
+    # Match the historical per-group seed and scalar bootstrap loop exactly.
+    group_rng = np.random.default_rng(rng.integers(0, 2**63 - 1))
+    bootstrap_means = np.empty((samples, energies.shape[1]))
+    for sample in range(samples):
+        indices = group_rng.integers(0, len(records), size=len(records))
+        bootstrap_means[sample] = energies[indices].mean(axis=0)
+    return mean, bootstrap_means.std(axis=0, ddof=1)
+
+
+def make_figure(records, *, field_strengths=None, bootstrap_samples=2000,
+                bootstrap_seed=0):
+    field_strengths = [0.5, 1.0] if field_strengths is None else field_strengths
+    figure, axes = plt.subplots(1, len(field_strengths), figsize=(10, 4.5),
+                                squeeze=False, layout="constrained")
+    axes = axes[0]
+    rng = np.random.default_rng(bootstrap_seed)
+    all_copies = sorted({record["number_of_copies"] for record in records})
+    color_map = matplotlib.colormaps["Blues"]
+    normalization = matplotlib.colors.Normalize(min(all_copies), max(all_copies))
+    for axis, field in zip(axes, field_strengths):
+        field_records = [record for record in records
+                         if matches_field(record["field_strength"], field)]
+        if not field_records:
+            raise ValueError(f"No data found for requested field strength W={field:g}")
+        for copies in sorted({record["number_of_copies"] for record in field_records}):
+            group = sorted([record for record in field_records
+                            if record["number_of_copies"] == copies],
+                           key=lambda record: record["realization"])
+            mean, error = mean_and_bootstrap_error(group, bootstrap_samples, rng)
+            axis.errorbar(copies * np.asarray(group[0]["beta"]), mean, yerr=error,
+                          marker="o", linestyle="None", capsize=0,
+                          color=color_map(normalization(copies)))
+        axis.set(xlabel=r"$n\beta$", title=f"W = {field:g}")
+    # Keep field strengths on the same energy scale, as in the paper plot.
+    lower = min(axis.get_ylim()[0] for axis in axes)
+    upper = max(axis.get_ylim()[1] for axis in axes)
+    for axis in axes:
+        axis.set_ylim(lower, upper)
+    axes[0].set_ylabel("VAP energy")
+    figure.colorbar(matplotlib.cm.ScalarMappable(norm=normalization, cmap=color_map),
+                    ax=list(axes), label="n")
+    return figure
 
 
 def main(argv=None):
     args = parse_args(argv)
     records = load_records(args.input_dir)
-    figure, axis = plt.subplots(figsize=(7.0, 4.5))
-
-    for field_strength in args.field_strengths:
-        field_records = [
-            record
-            for record in records
-            if matches_field(record["field_strength"], field_strength)
-        ]
-        if not field_records:
-            raise ValueError(
-                f"No data found for requested field strength W={field_strength:g}"
-            )
-        copies = sorted(
-            {record["number_of_copies"] for record in field_records}
-        )
-        for n_copies in copies:
-            group = [
-                record
-                for record in field_records
-                if record["number_of_copies"] == n_copies
-            ]
-            mean, standard_deviation = mean_and_sample_std(group)
-            beta = np.asarray(group[0]["beta"], dtype=float)
-            axis.errorbar(
-                n_copies * beta,
-                mean,
-                yerr=standard_deviation,
-                marker="o",
-                capsize=2,
-                label=f"W={field_strength:g}, n={n_copies}",
-            )
-
-    axis.set_xlabel(r"$n\beta$")
-    axis.set_ylabel("Mean VAP energy")
-    axis.grid(alpha=0.25)
-    axis.legend(fontsize="small", ncols=2)
-    figure.tight_layout()
+    figure = make_figure(records,
+                         field_strengths=args.field_strengths,
+                         bootstrap_samples=args.bootstrap_samples,
+                         bootstrap_seed=args.bootstrap_seed)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(args.output, bbox_inches="tight")
     plt.close(figure)

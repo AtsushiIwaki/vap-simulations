@@ -71,10 +71,15 @@ function parse_commandline(args=ARGS)
             default = 0.0
         "--beta_max"
             arg_type = Float64
-            default = 0.5
+            default = 1.0
         "--beta_step"
             arg_type = Float64
+            default = 0.2
+            help = "Spacing of the saved inverse-temperature samples"
+        "--time_step"
+            arg_type = Float64
             default = 0.1
+            help = "TDVP integration step, independent of beta_step"
         "--output_dir"
             default = DEFAULT_OUTPUT_DIR
     end
@@ -89,6 +94,7 @@ function validate_parameters(
     beta_min,
     beta_max,
     beta_step,
+    time_step=beta_step,
 )
     size_A > 0 || throw(ArgumentError("size_A must be positive"))
     distance_AC > 0 || throw(ArgumentError("distance_AC must be positive"))
@@ -98,6 +104,8 @@ function validate_parameters(
     length(unique(copies)) == length(copies) ||
         throw(ArgumentError("copy counts must be unique"))
     validate_beta_grid(beta_min, beta_max, beta_step)
+    validate_beta_grid(beta_min, beta_max, time_step)
+    validate_beta_grid(0.0, beta_step, time_step)
     return nothing
 end
 
@@ -117,6 +125,7 @@ function main(cli_args=ARGS)
     beta_min      = args["beta_min"]
     beta_max      = args["beta_max"]
     beta_step     = args["beta_step"]
+    time_step     = args["time_step"]
     output_dir    = args["output_dir"]
     validate_parameters(
         N_A,
@@ -126,6 +135,7 @@ function main(cli_args=ARGS)
         beta_min,
         beta_max,
         beta_step,
+        time_step,
     )
 
     # Use the maximum number of copies in the list to determine the system size
@@ -200,7 +210,7 @@ function main(cli_args=ARGS)
     for i in eachindex(beta_values)
 
         beta   = beta_values[i]
-        nsteps = imaginary_time_steps(beta, beta_step)
+        nsteps = imaginary_time_steps(beta, time_step)
         @show beta
 
         # --- Construct initial purification state ---
@@ -216,9 +226,9 @@ function main(cli_args=ARGS)
         # Approximate ρEβ) = exp(-β H / 2) ρE0) via TDVP with time step 0.1.
         psi = tdvp(
             -0.5 * H_ext,
-            beta_step * nsteps,
+            time_step * nsteps,
             psi;
-            time_step  = beta_step,
+            time_step  = time_step,
             nsteps     = nsteps,
             cutoff     = 1e-8,
             normalize  = true,
@@ -334,6 +344,7 @@ function main(cli_args=ARGS)
                 "beta_min" => beta_min,
                 "beta_max" => beta_max,
                 "beta_step" => beta_step,
+                "time_step" => time_step,
             ),
             "beta"      => beta_values,
             "energy"    => energy_values[:, n_copies],
