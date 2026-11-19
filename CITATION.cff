@@ -17,3 +17,9 @@ preferred-citation:
       given-names: Hideaki
     - family-names: Yoshioka
       given-names: Nobuyuki
+  year: 2026
+  status: preprint
+  url: "https://arxiv.org/abs/2611.24448"
+  identifiers:
+    - type: other
+      value: "arXiv:2611.24448"

@@ -4,6 +4,7 @@ Numerical simulation code for:
 
 > Atsushi Iwaki, Hideaki Hakoshima, and Nobuyuki Yoshioka,
 > *Virtual Autopurification in Translationally Invariant Quantum States*.
+> [arXiv:2611.24448](https://arxiv.org/abs/2611.24448) [quant-ph] (2026).
 
 If you use this code, please cite the paper. Machine-readable citation metadata
 is provided in [CITATION.cff](CITATION.cff).
@@ -28,8 +29,8 @@ python3 -m pip install -r requirements.txt
 ## Reproduce the VAP results
 
 Run the commands below from the repository root. Each generator defaults to
-the manuscript simulation conditions. The plots omit the reference curves
-and panel (c) of Figure 5.
+the simulation conditions described in the paper. The plotting scripts omit
+the reference curves in Figure 4 and Figure 5(a), and all of Figure 5(c).
 
 ### Figure 2: Finite-temperature method comparison
 
@@ -76,8 +77,8 @@ sh test/test_multicopy_generators.sh
 ```
 
 Tests use small systems and temporary input fixtures. The shell script checks
-all three copy-based generators with three copies; full manuscript sweeps
-are not part of the test suite.
+all three copy-based generators with three copies. The test suite uses smaller
+parameter sweeps than those in the paper.
 
 ## License
 
